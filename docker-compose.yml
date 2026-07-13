@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: zhijing
+      POSTGRES_USER: zhijing
+      POSTGRES_PASSWORD: zhijing123
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  mongodb:
+    image: mongo:7
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongodata:/data/db
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    environment:
+      RABBITMQ_DEFAULT_USER: zhijing
+      RABBITMQ_DEFAULT_PASS: zhijing123
+
+  gateway:
+    build: ./packages/gateway
+    ports:
+      - '3000:3000'
+    environment:
+      PORT: 3000
+      USER_SERVICE_URL: http://user-service:3001
+      SUBJECT_SERVICE_URL: http://subject-service:3002
+      GAME_SERVICE_URL: http://game-service:3003
+      SOCIAL_SERVICE_URL: http://social-service:3004
+      CONTENT_SERVICE_URL: http://content-service:3005
+    depends_on:
+      - user-service
+      - subject-service
+      - game-service
+      - social-service
+      - content-service
+
+  user-service:
+    build: ./packages/user-service
+    ports:
+      - '3001:3001'
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://zhijing:zhijing123@postgres:5432/zhijing
+      JWT_SECRET: zhijing-dev-secret
+      RABBITMQ_URL: amqp://zhijing:zhijing123@rabbitmq:5672
+    depends_on:
+      - postgres
+      - rabbitmq
+
+  subject-service:
+    build: ./packages/subject-service
+    ports:
+      - '3002:3002'
+    environment:
+      PORT: 3002
+      MONGODB_URI: mongodb://mongodb:27017/zhijing-subject
+      RABBITMQ_URL: amqp://zhijing:zhijing123@rabbitmq:5672
+    depends_on:
+      - mongodb
+      - rabbitmq
+
+  game-service:
+    build: ./packages/game-service
+    ports:
+      - '3003:3003'
+    environment:
+      PORT: 3003
+      DATABASE_URL: postgresql://zhijing:zhijing123@postgres:5432/zhijing
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://zhijing:zhijing123@rabbitmq:5672
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+
+  social-service:
+    build: ./packages/social-service
+    ports:
+      - '3004:3004'
+    environment:
+      PORT: 3004
+      MONGODB_URI: mongodb://mongodb:27017/zhijing-social
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://zhijing:zhijing123@rabbitmq:5672
+    depends_on:
+      - mongodb
+      - redis
+      - rabbitmq
+
+  content-service:
+    build: ./packages/content-service
+    ports:
+      - '3005:3005'
+    environment:
+      PORT: 3005
+      MONGODB_URI: mongodb://mongodb:27017/zhijing-content
+      RABBITMQ_URL: amqp://zhijing:zhijing123@rabbitmq:5672
+    depends_on:
+      - mongodb
+      - rabbitmq
+
+  web:
+    build: ./packages/web
+    ports:
+      - '5173:5173'
+    environment:
+      VITE_API_URL: http://localhost:3000
+      VITE_GAME_URL: ws://localhost:3003
+    depends_on:
+      - gateway
+
+volumes:
+  pgdata:
+  mongodata:
